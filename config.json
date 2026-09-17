@@ -1,0 +1,41 @@
+# Pac-Man configuration file.
+{
+  // Where the persistent highscore table is stored.
+  "highscore_filename": "highscores.json",
+
+  /* Number of lives the player starts with (1 - 99). */
+  "lives": 3,
+
+  /* Number of pacgums in the maze (1 - 999). */
+  "pacgum": 150,
+
+  # Scoring.
+  "points_per_pacgum": 10,
+  "points_per_super_pacgum": 50,
+  "points_per_ghost": 200,
+  "points_per_level": 500,
+
+  "seed": 42,
+
+  "level_max_time": 90,
+
+  # Seconds the ghosts stay edible after a super-pacgum.
+  "super_pacgum_duration": 7,
+
+  # Seconds before an eaten ghost comes back to its corner.
+  "ghost_respawn_time": 5,
+
+  # Ten levels of growing size. Sizes are clamped to 11 - 41.
+  "levels": [
+    { "width": 21, "height": 21 },
+    { "width": 21, "height": 21 },
+    { "width": 23, "height": 23 },
+    { "width": 23, "height": 23 },
+    { "width": 25, "height": 23 },
+    { "width": 25, "height": 23 },
+    { "width": 26, "height": 23 },
+    { "width": 26, "height": 23 },
+    { "width": 26, "height": 23 },
+    { "width": 26, "height": 23 }
+  ]
+}

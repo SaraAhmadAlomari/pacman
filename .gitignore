@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+myenv/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.coverage
+
+# Packaging
+build/
+dist/
+*.spec
+
