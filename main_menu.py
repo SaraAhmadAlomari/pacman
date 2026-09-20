@@ -16,7 +16,7 @@ from ui import (
     wait_for_key,
 )
 
-PREVIEW_SIZE = 5
+PREVIEW_SIZE = 10
 
 MENU_KEYS: Dict[int, str] = {
     pygame.K_1: "start",
@@ -68,7 +68,7 @@ def _draw_preview(
         draw_centered(
             screen,
             f"{index + 1}. {entry.name} - {entry.score} pts",
-            y_position + 30 + index * 26,
+            y_position + 30 + index * 22,
             26,
             TEXT_COLOR,
         )

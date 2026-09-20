@@ -7,13 +7,13 @@ MYPY_FLAGS := --warn-return-any --warn-unused-ignores \
               --ignore-missing-imports --disallow-untyped-defs \
               --check-untyped-defs
 
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run debug clean lint
 
 
 
 install:
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	$(PIP) install pygame
 	$(PIP) install ./mazegenerator-2.1.0-py3-none-any.whl
 
 run:
@@ -26,9 +26,6 @@ lint:
 	flake8 .
 	mypy . $(MYPY_FLAGS)
 
-lint-strict:
-	flake8 .
-	mypy . --strict
 
 
 clean:

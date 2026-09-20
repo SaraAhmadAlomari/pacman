@@ -3,52 +3,45 @@
 The configuration is JSON with comments. Three comment styles are
 accepted and removed before parsing:
 
-* shell style, a line starting with ``#``
-* C++ style, ``//`` until the end of the line
-* C style, ``/* ... */`` possibly spanning several lines
+* shell style: a line starting with '#'
+* C++ style: '//' until the end of the line
+* C style: '/* ... */' possibly spanning several lines
 
-Every value is validated. An invalid or missing value never stops the
-game: it is clamped to a safe default and a clear message is printed.
-Unknown keys are ignored.
+Invalid or missing values never stop the game. A safe default is used
+and a clear message is printed.
 """
 
 import json
 import os
 from typing import Any, Dict, List, Tuple
 
+
 ConfigDict = Dict[str, Any]
 
 DEFAULT_LEVEL_COUNT = 10
-MIN_LEVEL_COUNT = 10
+DEFAULT_MAZE_SIZE = 29
+
 MIN_MAZE_SIZE = 11
 MAX_MAZE_SIZE = 41
 
 DEFAULTS: ConfigDict = {
     "highscore_filename": "highscores.json",
     "lives": 3,
-    "pacgum": 150,
     "points_per_pacgum": 10,
     "points_per_super_pacgum": 50,
     "points_per_ghost": 200,
-    "points_per_level": 500,
     "seed": 42,
     "level_max_time": 90,
-    "super_pacgum_duration": 7,
-    "ghost_respawn_time": 5,
 }
 
 
 INT_BOUNDS: Dict[str, Tuple[int, int]] = {
     "lives": (1, 99),
-    "pacgum": (1, 10000),
     "points_per_pacgum": (0, 100000),
     "points_per_super_pacgum": (0, 100000),
     "points_per_ghost": (0, 100000),
-    "points_per_level": (0, 100000),
     "seed": (0, 2**31 - 1),
     "level_max_time": (5, 3600),
-    "super_pacgum_duration": (1, 600),
-    "ghost_respawn_time": (0, 600),
 }
 
 
@@ -68,14 +61,13 @@ def _warn(message: str) -> None:
 def strip_comments(text: str) -> str:
     """Remove comments from a JSON document.
 
-    Characters inside JSON strings are preserved, so a ``#`` used in a
-    player name or a file path is never mistaken for a comment.
+    Characters inside JSON strings are preserved.
 
     Args:
-        text: Raw content of the configuration file.
+        text: Raw configuration text.
 
     Returns:
-        The same document with every comment replaced by whitespace.
+        Configuration text without comments.
     """
     result: List[str] = []
     index = 0
@@ -88,12 +80,14 @@ def strip_comments(text: str) -> str:
 
         if in_string:
             result.append(char)
+
             if escaped:
                 escaped = False
             elif char == "\\":
                 escaped = True
             elif char == '"':
                 in_string = False
+
             index += 1
             continue
 
@@ -112,11 +106,18 @@ def strip_comments(text: str) -> str:
 
         if two == "/*":
             end = text.find("*/", index + 2)
+
             if end == -1:
-                index = length
-            else:
-                result.append("\n" * text.count("\n", index, end))
-                index = end + 2
+                _warn(
+                    "unterminated block comment, ignoring the rest "
+                    "of the file."
+                )
+                break
+
+            result.append(
+                "\n" * text.count("\n", index, end)
+            )
+            index = end + 2
             continue
 
         result.append(char)
@@ -126,157 +127,221 @@ def strip_comments(text: str) -> str:
 
 
 def _read_int(config: ConfigDict, key: str) -> int:
-    """Read one integer setting, clamped inside its allowed range.
+    """Read and validate an integer configuration value.
 
     Args:
         config: Raw configuration dictionary.
-        key: Name of the setting to read.
+        key: Configuration key.
 
     Returns:
-        A usable integer value.
+        A safe integer value.
     """
     default = int(DEFAULTS[key])
     minimum, maximum = INT_BOUNDS[key]
-    raw = config.get(key, default)
 
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        _warn(f"'{key}' is not a number, using default {default}.")
+    if key not in config:
+        _warn(
+            f"'{key}' is missing, using default {default}."
+        )
         return default
 
-    value = int(raw)
+    raw = config[key]
 
-    if value < minimum:
-        _warn(f"'{key}' is too small, clamped to {minimum}.")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        _warn(
+            f"'{key}' is not a valid integer, "
+            f"using default {default}."
+        )
+        return default
+
+    if raw < minimum:
+        _warn(
+            f"'{key}' is too small, using minimum {minimum}."
+        )
         return minimum
 
-    if value > maximum:
-        _warn(f"'{key}' is too large, clamped to {maximum}.")
+    if raw > maximum:
+        _warn(
+            f"'{key}' is too large, using maximum {maximum}."
+        )
         return maximum
 
-    return value
+    return raw
 
 
 def _read_filename(config: ConfigDict) -> str:
-    """Read the highscore filename setting.
+    """Read and validate the highscore filename.
 
     Args:
         config: Raw configuration dictionary.
 
     Returns:
-        A usable filename.
+        A safe filename.
     """
     default = str(DEFAULTS["highscore_filename"])
-    raw = config.get("highscore_filename", default)
+
+    if "highscore_filename" not in config:
+        _warn(
+            "'highscore_filename' is missing, "
+            f"using default '{default}'."
+        )
+        return default
+
+    raw = config["highscore_filename"]
 
     if not isinstance(raw, str) or not raw.strip():
-        _warn(f"'highscore_filename' is invalid, using '{default}'.")
+        _warn(
+            "'highscore_filename' is invalid, "
+            f"using default '{default}'."
+        )
         return default
 
     return raw.strip()
 
 
-def _read_size(level: Dict[str, Any], key: str, index: int) -> int:
-    """Read one maze dimension of one level.
+def _read_size(
+    level: Dict[str, Any],
+    key: str,
+) -> int:
+    """Read and validate one maze dimension.
 
     Args:
-        level: Raw level description.
-        key: Either ``width`` or ``height``.
-        index: Zero based index of the level, used in messages.
+        level: Level configuration.
+        key: 'width' or 'height'.
 
     Returns:
-        A maze dimension inside the supported range.
+        A safe maze dimension.
     """
-    raw = level.get(key, 21)
+    if key not in level:
+        _warn(
+            f"level '{key}' is missing, "
+            f"using default {DEFAULT_MAZE_SIZE}."
+        )
+        return DEFAULT_MAZE_SIZE
 
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        _warn(f"level {index + 1}: '{key}' is not a number, using 21.")
-        return 21
+    raw = level[key]
 
-    value = int(raw)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        _warn(
+            f"level '{key}' is not a valid integer, "
+            f"using default {DEFAULT_MAZE_SIZE}."
+        )
+        return DEFAULT_MAZE_SIZE
 
-    if value < MIN_MAZE_SIZE:
-        _warn(f"level {index + 1}: '{key}' clamped to {MIN_MAZE_SIZE}.")
+    if raw < MIN_MAZE_SIZE:
+        _warn(
+            f"level '{key}' is too small, "
+            f"using minimum {MIN_MAZE_SIZE}."
+        )
         return MIN_MAZE_SIZE
 
-    if value > MAX_MAZE_SIZE:
-        _warn(f"level {index + 1}: '{key}' clamped to {MAX_MAZE_SIZE}.")
+    if raw > MAX_MAZE_SIZE:
+        _warn(
+            f"level '{key}' is too large, "
+            f"using maximum {MAX_MAZE_SIZE}."
+        )
         return MAX_MAZE_SIZE
 
-    return value
+    return raw
 
 
 def _default_levels() -> List[Dict[str, int]]:
-    """Build the fallback list of levels.
+    """Create ten levels with the same maze size.
 
     Returns:
-        Ten levels of slowly growing size.
+        Ten 21x21 levels.
     """
-    levels: List[Dict[str, int]] = []
-
-    for index in range(DEFAULT_LEVEL_COUNT):
-        size = 21 + (index // 2) * 2
-        levels.append({"width": size, "height": size})
-
-    return levels
+    return [
+        {
+            "width": DEFAULT_MAZE_SIZE,
+            "height": DEFAULT_MAZE_SIZE,
+        }
+        for _ in range(DEFAULT_LEVEL_COUNT)
+    ]
 
 
 def _read_levels(config: ConfigDict) -> List[Dict[str, int]]:
-    """Read and repair the list of levels.
+    """Read the maze size and create ten equal-sized levels.
+
+    The configuration only needs one level definition. Its width and
+    height are applied to all ten levels.
 
     Args:
         config: Raw configuration dictionary.
 
     Returns:
-        At least ten valid level descriptions.
+        Ten levels with identical dimensions.
     """
-    raw = config.get("levels", config.get("level"))
+    raw = config.get("levels")
+
+    if raw is None:
+        _warn(
+            "'levels' is missing, "
+            f"using {DEFAULT_MAZE_SIZE}x{DEFAULT_MAZE_SIZE} "
+            f"for all {DEFAULT_LEVEL_COUNT} levels."
+        )
+        return _default_levels()
 
     if not isinstance(raw, list) or not raw:
-        _warn("'levels' is missing or invalid, using the default levels.")
+        _warn(
+            "'levels' is invalid, "
+            f"using {DEFAULT_MAZE_SIZE}x{DEFAULT_MAZE_SIZE} "
+            f"for all {DEFAULT_LEVEL_COUNT} levels."
+        )
         return _default_levels()
+
+    first_level = raw[0]
+
+    if not isinstance(first_level, dict):
+        _warn(
+            "first level is not an object, "
+            f"using {DEFAULT_MAZE_SIZE}x{DEFAULT_MAZE_SIZE} "
+            f"for all {DEFAULT_LEVEL_COUNT} levels."
+        )
+        return _default_levels()
+
+    width = _read_size(first_level, "width")
+    height = _read_size(first_level, "height")
 
     levels: List[Dict[str, int]] = []
 
-    for index, item in enumerate(raw):
-        if not isinstance(item, dict):
-            _warn(f"level {index + 1} is not an object, using 21x21.")
-            levels.append({"width": 21, "height": 21})
-            continue
-
+    for _ in range(DEFAULT_LEVEL_COUNT):
         levels.append(
             {
-                "width": _read_size(item, "width", index),
-                "height": _read_size(item, "height", index),
+                "width": width,
+                "height": height,
             }
         )
 
-    if len(levels) < MIN_LEVEL_COUNT:
+    if len(raw) > 1:
         _warn(
-            f"only {len(levels)} level(s) defined, padding up to "
-            f"{MIN_LEVEL_COUNT}."
+            "only the first level size is used; "
+            "all levels have the same size."
         )
-        while len(levels) < MIN_LEVEL_COUNT:
-            levels.append(dict(levels[-1]))
 
     return levels
 
 
 def validate_config(config: ConfigDict) -> ConfigDict:
-    """Turn a raw configuration into a safe one.
+    """Turn raw configuration into a safe configuration.
 
     Args:
-        config: Configuration as read from the file.
+        config: Raw configuration dictionary.
 
     Returns:
-        A configuration where every key exists and holds a usable value.
+        Validated configuration.
     """
-    known = set(DEFAULTS) | {"levels", "level"}
+    known_keys = set(DEFAULTS) | {"levels"}
 
     for key in config:
-        if key not in known:
-            _warn(f"unknown key '{key}' ignored.")
+        if key not in known_keys:
+            _warn(
+                f"unknown key '{key}' ignored."
+            )
 
-    clean: ConfigDict = {"highscore_filename": _read_filename(config)}
+    clean: ConfigDict = {}
+
+    clean["highscore_filename"] = _read_filename(config)
 
     for key in INT_BOUNDS:
         clean[key] = _read_int(config, key)
@@ -286,38 +351,88 @@ def validate_config(config: ConfigDict) -> ConfigDict:
     return clean
 
 
+def _default_config() -> ConfigDict:
+    """Return a complete default configuration.
+
+    Returns:
+        Safe default configuration.
+    """
+    config: ConfigDict = dict(DEFAULTS)
+    config["levels"] = _default_levels()
+
+    return config
+
+
 def load_config(filename: str) -> ConfigDict:
-    """Load, clean and validate a configuration file.
+    """Load and validate the configuration file.
+
+    Any configuration problem is repaired with safe defaults so that
+    the game can continue running.
 
     Args:
         filename: Path to the JSON configuration file.
 
     Returns:
         A validated configuration dictionary.
-
-    Raises:
-        ConfigError: If the file cannot be read or parsed.
     """
     if not filename.lower().endswith(".json"):
-        raise ConfigError(f"'{filename}' is not a .json file.")
+        _warn(
+            f"'{filename}' is not a .json file, "
+            "using default configuration."
+        )
+        return _default_config()
 
     if not os.path.isfile(filename):
-        raise ConfigError(f"configuration file '{filename}' was not found.")
+        _warn(
+            f"configuration file '{filename}' was not found, "
+            "using default configuration."
+        )
+        return _default_config()
 
     try:
-        with open(filename, "r", encoding="utf-8") as config_file:
+        with open(
+            filename,
+            "r",
+            encoding="utf-8",
+        ) as config_file:
             text = config_file.read()
     except OSError as exc:
-        raise ConfigError(f"cannot read '{filename}': {exc}") from exc
+        _warn(
+            f"cannot read '{filename}': {exc}. "
+            "Using default configuration."
+        )
+        return _default_config()
+
+    if not text.strip():
+        _warn(
+            "configuration file is empty, "
+            "using default configuration."
+        )
+        return _default_config()
+
+    cleaned_text = strip_comments(text)
+
+    if not cleaned_text.strip():
+        _warn(
+            "configuration file contains no data, "
+            "using default configuration."
+        )
+        return _default_config()
 
     try:
-        data = json.loads(strip_comments(text))
+        data = json.loads(cleaned_text)
     except json.JSONDecodeError as exc:
-        raise ConfigError(
-            f"'{filename}' is not valid JSON (line {exc.lineno}): {exc.msg}"
-        ) from exc
+        _warn(
+            f"invalid JSON at line {exc.lineno}: {exc.msg}. "
+            "Using default configuration."
+        )
+        return _default_config()
 
     if not isinstance(data, dict):
-        raise ConfigError(f"'{filename}' must contain a JSON object.")
+        _warn(
+            "configuration root must be a JSON object. "
+            "Using default configuration."
+        )
+        return _default_config()
 
     return validate_config(data)

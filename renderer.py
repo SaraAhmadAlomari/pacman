@@ -45,8 +45,8 @@ def window_size(state: GameState) -> Tuple[int, int]:
         Width and height in pixels, HUD included.
     """
     return (
-        state.maze.width * CELL_SIZE,
-        state.maze.height * CELL_SIZE + HUD_HEIGHT,
+        state.maze.width * CELL_SIZE + WALL_WIDTH,
+        state.maze.height * CELL_SIZE + HUD_HEIGHT + WALL_WIDTH,
     )
 
 

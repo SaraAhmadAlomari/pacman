@@ -46,10 +46,7 @@ Other Makefile rules:
 | Rule | Effect |
 |---|---|
 | `make lint` | `flake8 .` and `mypy .` with the mandatory flags |
-| `make lint-strict` | `flake8 .` and `mypy . --strict` |
-| `make test` | the unit test suite (`pytest`) |
 | `make debug` | run the game under `pdb` |
-| `make package` | build the standalone binary in `dist/` |
 | `make clean` | remove caches and build artefacts |
 
 ### Controls
@@ -92,19 +89,12 @@ inside a JSON string is preserved.
 |---|---|---|---|
 | `highscore_filename` | `highscores.json` | non-empty | where the table is stored |
 | `lives` | 3 | 1–99 | lives at the start |
-| `pacgum` | 150 | 1–10000 | wanted pacgums per level |
 | `points_per_pacgum` | 10 | 0–100000 | score per pacgum |
 | `points_per_super_pacgum` | 50 | 0–100000 | score per super-pacgum |
 | `points_per_ghost` | 200 | 0–100000 | score per edible ghost |
-| `points_per_level` | 500 | 0–100000 | bonus for clearing a level |
 | `seed` | 42 | ≥ 0 | seed of the **first** level only |
 | `level_max_time` | 90 | 5–3600 | seconds per level |
-| `super_pacgum_duration` | 7 | 1–600 | seconds the ghosts stay edible |
-| `ghost_respawn_time` | 5 | 0–600 | seconds before an eaten ghost returns |
 | `levels` | 10 levels | ≥ 10 entries | list of `{ "width", "height" }`, each clamped to 11–41 |
-
-`pacgum` is a target count spread evenly over the corridors of the maze.
-When it is greater than the number of corridors, every corridor gets one.
 
 ### Faulty configuration handling
 
@@ -240,7 +230,7 @@ configuration). That folder is uploaded to Itch.io as a free, unlisted
 build.
 
 ```bash
-make package     # or: ./package.sh
+./package.sh
 ```
 
 ## Project Management
@@ -262,14 +252,7 @@ Each feature was reviewed by the other member before being merged.
 
 ### Use of AI
 
-AI was used as a reviewer and a rubber duck, not as an author:
-
-- reviewing our first version against the subject, which is how we found
-  the missing CLI argument, the absent comment support in the config
-  parser and the HUD offset applied to the player only
-- explaining why the levels were not random, which led to the discovery
-  that the generator reseeds the global `random` module
-- suggesting edge cases for the config and highscore tests
-
-Every suggestion was read, rewritten in our own style and tested before
-being kept. Nothing was merged that we could not explain.
+- Explaining key project concepts (such as the Pygame library)
+- Clarifying ghost movement logic using a bfs algorithm
+- Assisting in troubleshooting and resolving errors that arose
+- Proposing edge cases for configuration and high-score testing
